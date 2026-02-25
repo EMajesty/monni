@@ -14,7 +14,8 @@
         devShells.default = pkgs.mkShell {
           packages = [
             pkgs.arduino-cli
-            pkgs.avr-gcc
+            pkgs.pkgsCross.avr.buildPackages.gcc
+            pkgs.pkgsCross.avr.buildPackages.binutils
             pkgs.avrdude
             pkgs.python3
             pkgs.gnumake
