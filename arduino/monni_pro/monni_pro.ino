@@ -17,14 +17,16 @@ static const uint8_t STEP_BUTTON_PIN = 7; // active LOW
 static const uint8_t TFT_CS = 10;
 static const uint8_t TFT_DC = 9;
 static const uint8_t TFT_RST = 8;
-// MOSI=51, SCK=52 are hardware SPI pins on Mega — do not use for address lines
+// Hardware SPI pins on Mega: MOSI=51, SCK=52, SS=53 — kept off address lines.
+// Pin 50 (MISO) stays as input and is safe to use. Pins 12 and 13 freed from
+// software SPI. Pin 5 is a spare GPIO. Together these cover A21-A23.
 
 static const uint8_t DATA_PINS[8] = {22, 23, 24, 25, 26, 27, 28, 29};
-// Pins 50-53 conflict with hardware SPI (MISO/MOSI/SCK/SS); max 20 address lines
-static const uint8_t ADDR_PINS[20] = {
-  30, 31, 32, 33, 34, 35, 36, 37,
-  38, 39, 40, 41, 42, 43, 44, 45,
-  46, 47, 48, 49
+static const uint8_t ADDR_PINS[24] = {
+  30, 31, 32, 33, 34, 35, 36, 37,   // A0-A7
+  38, 39, 40, 41, 42, 43, 44, 45,   // A8-A15
+  46, 47, 48, 49, 50,               // A16-A20 (50=MISO, safe as input)
+  12, 13,  5                        // A21-A23 (freed/spare pins)
 };
 
 Adafruit_SSD1306 display(128, 64, &SPI, TFT_DC, TFT_RST, TFT_CS);
@@ -42,7 +44,7 @@ static volatile bool sampleReady = false;
 static volatile uint32_t sampleCount = 0;
 
 static uint8_t dataLines = 8;
-static uint8_t addressLines = 16;
+static uint8_t addressLines = 24;
 static DecodeMode decodeMode = DECODE_RAW;
 
 static uint32_t clockHz = 1000;
@@ -225,7 +227,7 @@ static void updateEncoder() {
         if (menuIndex == 0) {
           if (dataLines < 8) dataLines++;
         } else if (menuIndex == 1) {
-          if (addressLines < 20) addressLines++;
+          if (addressLines < 24) addressLines++;
         } else if (menuIndex == 2) {
           if (decodeMode < DECODE_68000) decodeMode = (DecodeMode)(decodeMode + 1);
         }
@@ -305,7 +307,7 @@ void setup() {
   for (uint8_t i = 0; i < 8; ++i) {
     pinMode(DATA_PINS[i], INPUT);
   }
-  for (uint8_t i = 0; i < 20; ++i) {
+  for (uint8_t i = 0; i < 24; ++i) {
     pinMode(ADDR_PINS[i], INPUT);
   }
 

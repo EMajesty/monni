@@ -46,7 +46,8 @@ Display (SSD1306 128x64 OLED, hardware SPI):
 
 Data and address bus:
 - Data lines D0..D7: D22..D29
-- Address lines A0..A19: D30..D49 (max 20; D50–D53 reserved for hardware SPI)
+- Address lines A0..A20: D30..D50 (D50 = MISO, safe as input in SPI master mode)
+- Address lines A21..A23: D12, D13, D5 (freed/spare pins; D51–D53 are SPI MOSI/SCK/SS)
 
 ### UI and controls
 
