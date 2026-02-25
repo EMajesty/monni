@@ -10,7 +10,7 @@ nix develop
 
 ## Arduino project
 
-Sketch: `arduino/monni_pro/monni_pro.ino`
+Sketch: `src/monni_pro.ino`
 
 ### Dependencies
 
@@ -64,4 +64,3 @@ Display layout:
 
 - Decode modes are minimal and show `OPxx` style markers for the selected CPU. Extend `decodeOpcode()` to add full opcode tables.
 - Sampling uses `digitalRead()` inside the clock ISR. For very fast clocks, consider direct port reads and contiguous pin mapping.
-
