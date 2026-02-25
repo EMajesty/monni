@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <Adafruit_GFX.h>
-#include <Adafruit_ST7789.h>
+#include <Adafruit_SSD1306.h>
 
 // Pin map (Arduino Mega 2560)
 static const uint8_t CLOCK_IN_PIN = 2;   // INT0
@@ -27,7 +27,7 @@ static const uint8_t ADDR_PINS[24] = {
   46, 47, 48, 49, 50, 51, 52, 53
 };
 
-Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
+Adafruit_SSD1306 display(128, 64, TFT_MOSI, TFT_SCLK, TFT_DC, TFT_RST, TFT_CS);
 
 enum DecodeMode : uint8_t {
   DECODE_RAW = 0,
@@ -55,12 +55,13 @@ static uint8_t lastEncA = 1;
 static uint8_t lastEncB = 1;
 static uint32_t lastButtonMs = 0;
 static uint32_t lastStepMs = 0;
+static uint32_t lastUiMs = 0;
 
-static const uint16_t SCREEN_W = 240;
-static const uint16_t SCREEN_H = 320;
+static const uint16_t SCREEN_W = 128;
+static const uint16_t SCREEN_H = 64;
 static const uint16_t TOP_BAR_H = 16;
 static const uint8_t LINE_H = 8;
-static const uint8_t MAX_COLS = 40;
+static const uint8_t MAX_COLS = 21;
 
 static const uint8_t MAX_ROWS = (SCREEN_H - TOP_BAR_H) / LINE_H;
 static char rows[MAX_ROWS][MAX_COLS + 1];
@@ -97,50 +98,51 @@ static void pushRow(const char *line) {
 }
 
 static void redrawRows() {
-  tft.fillRect(0, TOP_BAR_H, SCREEN_W, SCREEN_H - TOP_BAR_H, ST77XX_BLACK);
-  tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
-  tft.setTextSize(1);
+  display.fillRect(0, TOP_BAR_H, SCREEN_W, SCREEN_H - TOP_BAR_H, SSD1306_BLACK);
+  display.setTextColor(SSD1306_WHITE, SSD1306_BLACK);
+  display.setTextSize(1);
   for (uint8_t i = 0; i < MAX_ROWS; ++i) {
     uint8_t idx = (rowHead + i) % MAX_ROWS;
     uint16_t y = TOP_BAR_H + (i * LINE_H);
-    tft.setCursor(0, y);
-    tft.print(rows[idx]);
+    display.setCursor(0, y);
+    display.print(rows[idx]);
   }
+  display.display();
 }
 
 static void drawTopBar() {
-  tft.fillRect(0, 0, SCREEN_W, TOP_BAR_H, ST77XX_BLACK);
-  tft.setTextColor(ST77XX_YELLOW, ST77XX_BLACK);
-  tft.setTextSize(1);
+  display.fillRect(0, 0, SCREEN_W, TOP_BAR_H, SSD1306_BLACK);
+  display.setTextColor(SSD1306_WHITE, SSD1306_BLACK);
+  display.setTextSize(1);
 
-  tft.setCursor(0, 0);
-  tft.print("CLK:");
+  display.setCursor(0, 0);
+  display.print("CLK:");
   if (runEnabled) {
-    tft.print(clockHz);
-    tft.print("Hz");
+    display.print(clockHz);
+    display.print("Hz");
   } else {
-    tft.print("STOP");
+    display.print("STOP");
   }
 
-  tft.setCursor(150, 0);
-  tft.print("D");
-  tft.print(dataLines);
-  tft.print(" A");
-  tft.print(addressLines);
-  tft.print(" ");
-  tft.print(decodeLabel(decodeMode));
-
+  display.setCursor(0, 8);
   if (menuMode) {
-    tft.setCursor(0, 8);
-    tft.setTextColor(ST77XX_CYAN, ST77XX_BLACK);
     if (menuIndex == 0) {
-      tft.print("DATA LINES");
+      display.print(">DATA LINES");
     } else if (menuIndex == 1) {
-      tft.print("ADDR LINES");
+      display.print(">ADDR LINES");
     } else if (menuIndex == 2) {
-      tft.print("DECODE MODE");
+      display.print(">DECODE MODE");
     }
+  } else {
+    display.print("D");
+    display.print(dataLines);
+    display.print(" A");
+    display.print(addressLines);
+    display.print(" ");
+    display.print(decodeLabel(decodeMode));
   }
+
+  display.display();
 }
 
 static uint32_t readAddressLines() {
@@ -327,15 +329,16 @@ void setup() {
 
   attachInterrupt(digitalPinToInterrupt(CLOCK_IN_PIN), clockIsr, RISING);
 
-  tft.init(SCREEN_W, SCREEN_H);
-  tft.setRotation(0);
-  tft.fillScreen(ST77XX_BLACK);
+  display.begin(SSD1306_SWITCHCAPVCC);
+  display.clearDisplay();
+  display.display();
 
   for (uint8_t i = 0; i < MAX_ROWS; ++i) {
     rows[i][0] = '\0';
   }
 
   drawTopBar();
+  pushRow("WAITING...");
   redrawRows();
 }
 
@@ -343,6 +346,12 @@ void loop() {
   updateEncoder();
   updateButtons();
   updateRunState();
+
+  // Keep UI visible even without samples
+  if (millis() - lastUiMs > 200) {
+    lastUiMs = millis();
+    drawTopBar();
+  }
 
   if (sampleReady) {
     noInterrupts();
@@ -374,7 +383,7 @@ void loop() {
     }
 
     pushRow(line);
-    redrawRows();
+    // redrawRows();
     drawTopBar();
 
     Serial.print("ADDR=0x");

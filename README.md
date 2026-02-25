@@ -10,7 +10,7 @@ nix develop
 
 ## Arduino project
 
-Sketch: `src/monni_pro.ino`
+Sketch: `arduino/monni_pro/monni_pro.ino`
 
 ### Dependencies
 
