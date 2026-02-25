@@ -17,17 +17,17 @@ static const uint8_t STEP_BUTTON_PIN = 7; // active LOW
 static const uint8_t TFT_CS = 10;
 static const uint8_t TFT_DC = 9;
 static const uint8_t TFT_RST = 8;
-static const uint8_t TFT_MOSI = 12;
-static const uint8_t TFT_SCLK = 13;
+// MOSI=51, SCK=52 are hardware SPI pins on Mega — do not use for address lines
 
 static const uint8_t DATA_PINS[8] = {22, 23, 24, 25, 26, 27, 28, 29};
-static const uint8_t ADDR_PINS[24] = {
+// Pins 50-53 conflict with hardware SPI (MISO/MOSI/SCK/SS); max 20 address lines
+static const uint8_t ADDR_PINS[20] = {
   30, 31, 32, 33, 34, 35, 36, 37,
   38, 39, 40, 41, 42, 43, 44, 45,
-  46, 47, 48, 49, 50, 51, 52, 53
+  46, 47, 48, 49
 };
 
-Adafruit_SSD1306 display(128, 64, TFT_MOSI, TFT_SCLK, TFT_DC, TFT_RST, TFT_CS);
+Adafruit_SSD1306 display(128, 64, &SPI, TFT_DC, TFT_RST, TFT_CS);
 
 enum DecodeMode : uint8_t {
   DECODE_RAW = 0,
@@ -42,7 +42,7 @@ static volatile bool sampleReady = false;
 static volatile uint32_t sampleCount = 0;
 
 static uint8_t dataLines = 8;
-static uint8_t addressLines = 24;
+static uint8_t addressLines = 16;
 static DecodeMode decodeMode = DECODE_RAW;
 
 static uint32_t clockHz = 1000;
@@ -107,7 +107,6 @@ static void redrawRows() {
     display.setCursor(0, y);
     display.print(rows[idx]);
   }
-  display.display();
 }
 
 static void drawTopBar() {
@@ -125,24 +124,10 @@ static void drawTopBar() {
   }
 
   display.setCursor(0, 8);
-  if (menuMode) {
-    if (menuIndex == 0) {
-      display.print(">DATA LINES");
-    } else if (menuIndex == 1) {
-      display.print(">ADDR LINES");
-    } else if (menuIndex == 2) {
-      display.print(">DECODE MODE");
-    }
-  } else {
-    display.print("D");
-    display.print(dataLines);
-    display.print(" A");
-    display.print(addressLines);
-    display.print(" ");
-    display.print(decodeLabel(decodeMode));
-  }
-
-  display.display();
+  display.print("D");
+  display.print(dataLines);
+  display.print(" A");
+  display.print(addressLines);
 }
 
 static uint32_t readAddressLines() {
@@ -240,7 +225,7 @@ static void updateEncoder() {
         if (menuIndex == 0) {
           if (dataLines < 8) dataLines++;
         } else if (menuIndex == 1) {
-          if (addressLines < 24) addressLines++;
+          if (addressLines < 20) addressLines++;
         } else if (menuIndex == 2) {
           if (decodeMode < DECODE_68000) decodeMode = (DecodeMode)(decodeMode + 1);
         }
@@ -320,7 +305,7 @@ void setup() {
   for (uint8_t i = 0; i < 8; ++i) {
     pinMode(DATA_PINS[i], INPUT);
   }
-  for (uint8_t i = 0; i < 24; ++i) {
+  for (uint8_t i = 0; i < 20; ++i) {
     pinMode(ADDR_PINS[i], INPUT);
   }
 
@@ -338,8 +323,7 @@ void setup() {
   }
 
   drawTopBar();
-  pushRow("WAITING...");
-  redrawRows();
+  display.display();
 }
 
 void loop() {
@@ -347,10 +331,12 @@ void loop() {
   updateButtons();
   updateRunState();
 
-  // Keep UI visible even without samples
+  bool needsFlush = false;
+
   if (millis() - lastUiMs > 200) {
     lastUiMs = millis();
     drawTopBar();
+    needsFlush = true;
   }
 
   if (sampleReady) {
@@ -383,8 +369,9 @@ void loop() {
     }
 
     pushRow(line);
-    // redrawRows();
+    redrawRows();
     drawTopBar();
+    needsFlush = true;
 
     Serial.print("ADDR=0x");
     Serial.print(addrStr);
@@ -397,5 +384,9 @@ void loop() {
       Serial.print(decodeOpcode(data, decodeMode));
     }
     Serial.println();
+  }
+
+  if (needsFlush) {
+    display.display();
   }
 }
