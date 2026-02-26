@@ -2,7 +2,7 @@
 
 Logic monitor for 8 data lines and 8-24 address lines. Starts in clock output
 mode; switch to clock input mode via the encoder menu to sample an external bus.
-Samples are printed to Serial and shown as rolling rows on a 240×320 ST7789 TFT.
+Samples are printed to Serial and shown as rolling rows on a 128×64 GM12864-59N I2C display.
 
 ## Build environment (nix)
 
@@ -20,7 +20,7 @@ Install these Arduino libraries:
 
 ```sh
 arduino-cli lib install "Adafruit GFX Library"
-arduino-cli lib install "Adafruit ST7789"
+arduino-cli lib install "Adafruit SSD1306"
 ```
 
 ### Default pin map
@@ -35,12 +35,13 @@ Controls:
 - Run/Stop toggle: D6 (HIGH = run)
 - Step button: D7 (active LOW)
 
-Display (ST7789 240×320 TFT, portrait, hardware SPI):
-- CS: D10
-- DC: D9
-- RST: D8
-- MOSI: D51 (hardware SPI)
-- SCLK: D52 (hardware SPI)
+Display (GM12864-59N ver:2.0, 128×64, I2C):
+- SDA: D20 (Mega hardware I2C)
+- SCL: D21 (Mega hardware I2C)
+- VCC: 3.3 V or 5 V (check module label)
+- GND: GND
+- I2C address: `0x3C` (default); change to `0x3D` in `setup()` if the SA0/BS1
+  address-select pin is tied HIGH on your module
 
 Data and address bus:
 - Data lines D0..D7: D22..D29
@@ -60,10 +61,10 @@ Menu items (cycle with encoder click):
 3. **DECODE** — opcode decode mode (RAW / 6502 / Z80 / 68K)
 4. **MODE** — CLK_OUT (generate clock) / CLK_IN (sample external clock)
 
-Display layout:
+Display layout (128×64, text size 1 = 21 cols × 8 data rows):
 - Row 1: `CLK:OUT 1000Hz` or `CLK:OUT 1000Hz STP` or `CLK:IN`
 - Row 2: bus width, e.g. `D8 A24 RAW`; or active menu item when in menu
-- Lower area: rolling rows of samples (CLK_IN mode only)
+- Lower 6 rows: rolling samples (CLK_IN mode only)
 
 ### Notes
 
