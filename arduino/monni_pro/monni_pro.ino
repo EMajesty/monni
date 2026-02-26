@@ -1,7 +1,7 @@
 #include <Arduino.h>
-#include <SPI.h>
+#include <Wire.h>
 #include <Adafruit_GFX.h>
-#include <Adafruit_ST7789.h>
+#include <Adafruit_SSD1306.h>
 
 // Pin map (Arduino Mega 2560)
 static const uint8_t CLOCK_IN_PIN  = 2;   // INT0
@@ -12,11 +12,7 @@ static const uint8_t ENC_B_PIN      = 19;
 static const uint8_t ENC_SW_PIN     = 4;
 static const uint8_t RUN_TOGGLE_PIN = 6;   // HIGH = run, LOW = stop
 static const uint8_t STEP_BUTTON_PIN= 7;   // active LOW
-
-static const uint8_t TFT_CS  = 10;
-static const uint8_t TFT_DC  = 9;
-static const uint8_t TFT_RST = 8;
-// Hardware SPI on Mega: MOSI=D51, SCK=D52
+// I2C: SDA=D20, SCL=D21 (Mega hardware I2C); address 0x3C or 0x3D
 
 static const uint8_t DATA_PINS[8] = {22, 23, 24, 25, 26, 27, 28, 29};
 static const uint8_t ADDR_PINS[24] = {
@@ -26,14 +22,15 @@ static const uint8_t ADDR_PINS[24] = {
   12, 13,  5                        // A21-A23
 };
 
-Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RST);
+// GM12864-59N ver:2.0 — 128×64 I2C; -1 = no dedicated reset pin
+Adafruit_SSD1306 display(128, 64, &Wire, -1);
 
-static const uint16_t SCREEN_W  = 240;
-static const uint16_t SCREEN_H  = 320;
+static const uint16_t SCREEN_W  = 128;
+static const uint16_t SCREEN_H  = 64;
 static const uint16_t TOP_BAR_H = 16; // 2 text rows at textSize 1
 static const uint8_t  LINE_H    = 8;
-static const uint8_t  MAX_COLS  = 40; // floor(240/6)
-static const uint8_t  MAX_ROWS  = (SCREEN_H - TOP_BAR_H) / LINE_H; // 38
+static const uint8_t  MAX_COLS  = 21; // floor(128/6)
+static const uint8_t  MAX_ROWS  = (SCREEN_H - TOP_BAR_H) / LINE_H; // 6
 
 enum DecodeMode  : uint8_t { DECODE_RAW=0, DECODE_6502, DECODE_Z80, DECODE_68000 };
 enum MonitorMode : uint8_t { MODE_CLK_OUT=0, MODE_CLK_IN };
@@ -92,24 +89,24 @@ static const char *decodeOpcode(uint8_t v, DecodeMode m) {
 }
 
 // Print s left-aligned in a MAX_COLS-wide field.
-// Using background colour in setTextColor overwrites old content in place.
+// setTextColor with bg colour overwrites old content in place (framebuffer).
 static void printPadded(const char *s) {
   char buf[MAX_COLS + 1];
   uint8_t len = 0;
   while (len < MAX_COLS && s[len]) { buf[len] = s[len]; len++; }
   while (len < MAX_COLS) buf[len++] = ' ';
   buf[MAX_COLS] = '\0';
-  tft.print(buf);
+  display.print(buf);
 }
 
 static void drawTopBar() {
-  tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
-  tft.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE, SSD1306_BLACK);
+  display.setTextSize(1);
 
   char line[MAX_COLS + 1];
 
   // Row 0: mode / clock info
-  tft.setCursor(0, 0);
+  display.setCursor(0, 0);
   if (!menuMode) {
     if (monitorMode == MODE_CLK_OUT) {
       snprintf(line, sizeof(line), "CLK:OUT %luHz%s",
@@ -123,7 +120,7 @@ static void drawTopBar() {
   printPadded(line);
 
   // Row 1: bus config or active menu item
-  tft.setCursor(0, 8);
+  display.setCursor(0, 8);
   if (!menuMode) {
     snprintf(line, sizeof(line), "D%-2d A%-2d %s",
              dataLines, addressLines, decodeLabel(decodeMode));
@@ -138,20 +135,23 @@ static void drawTopBar() {
     }
   }
   printPadded(line);
+  display.display();
 }
 
-// Append one line to the rolling data area (overwrites in place, no fill needed).
+// Append one line to the rolling data area (overwrites in place).
 static void appendRow(const char *line) {
-  tft.setTextColor(ST77XX_WHITE, ST77XX_BLACK);
-  tft.setTextSize(1);
-  tft.setCursor(0, TOP_BAR_H + rowY * LINE_H);
+  display.setTextColor(SSD1306_WHITE, SSD1306_BLACK);
+  display.setTextSize(1);
+  display.setCursor(0, TOP_BAR_H + rowY * LINE_H);
   printPadded(line);
+  display.display();
   rowY = (rowY + 1) % MAX_ROWS;
 }
 
 // Clear the data area and reset write cursor.
 static void clearDataArea() {
-  tft.fillRect(0, TOP_BAR_H, SCREEN_W, SCREEN_H - TOP_BAR_H, ST77XX_BLACK);
+  display.fillRect(0, TOP_BAR_H, SCREEN_W, SCREEN_H - TOP_BAR_H, SSD1306_BLACK);
+  display.display();
   rowY = 0;
 }
 
@@ -299,9 +299,13 @@ void setup() {
 
   attachInterrupt(digitalPinToInterrupt(CLOCK_IN_PIN), clockIsr, RISING);
 
-  tft.init(240, 320);
-  tft.setRotation(0); // portrait: 240 wide × 320 tall
-  tft.fillScreen(ST77XX_BLACK);
+  // GM12864-59N ver:2.0 — try 0x3C first; change to 0x3D if display stays blank
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 init failed"));
+    for (;;) {}
+  }
+  display.clearDisplay();
+  display.display();
   drawTopBar();
 }
 
